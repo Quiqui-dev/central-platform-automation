@@ -87,7 +87,7 @@ jobs:
           if [[ -z "$BASE_SHA" || -z "$HEAD_SHA"]]; then
             echo "run_checks=true" >> "$GITHUB_OUTPUT"
             echo "changed_tf_count=unknown" >> "$GITHUB_OUTPUT"
-            echo "No base/head SHA provided; running checks by default"
+            echo "No base/head SHA provided running checks by default"
             exit 0
           fi
 
