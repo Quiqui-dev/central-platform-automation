@@ -1,0 +1,154 @@
+name: Release Central Workflow
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/terraform-pr-quality-single-module.yml"
+      - ".github/workflows/terraform-pr-quality-caller-example.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Version and Release reusable workflows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next semantic Version
+        id: semver
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force
+
+          LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+
+          if [[ -z "${LATEST_TAG}" ]]; then
+            LATEST_TAG="v0.0.1"
+          fi
+
+          echo "Latest tag: ${LATEST_TAG}"
+
+          MAJOR=$(echo "${LATEST_TAG}" | cut -d. -f1)
+          MINOR=$(echo "${LATEST_TAG}" | cut -d. -f2)
+          PATCH=$(echo "${LATEST_TAG}" | cut -d. -f3)
+
+          if [[ "${LATEST_TAG}" == "v0.0.1" ]]; then
+            RANGE="HEAD"
+          else
+            RANGE="${LATEST_TAG}..HEAD"
+          fi
+
+          COMMIT_BODIES=$(git log ${RANGE} --pretty=format:%B)
+          COMMIT_SUBJECTS=$(git log ${RANGE} --pretty=format:%s)
+
+          BUMP_TYPE=""
+
+          if echo "${COMMIT_BODIES}" | grep -Eiq 'BREAKING CHANGE'; then
+            BUMP_TYPE="major"
+          elif echo "${COMMIT_SUBJECTS}" | grep -Eiq '^[^[:space:]]+!:'; then
+            BUMP_TYPE="major"
+          elif echo "${COMMIT_SUBJECTS}" | grep -Eiq '^feat(\(.+\))?:'; then
+            BUMP_TYPE="minor"
+          elif echo "${COMMIT_SUBJECTS}" | grep -Eiq '^fix(\(.+\))?:|^refactor(\(.+\))?:|^perf(\(.+\))?:|^security(\(.+\))?:'; then
+            BUMP_TYPE="patch"
+          else
+            echo "No releaseable conventional commits detected. Skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          case "${BUMP_TYPE}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          MAJOR_TAG="v${MAJOR}"
+
+          echo "bump_type=${BUMP_TYPE}" >> "$GITHUB_OUTPUT"
+          echo "new_tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
+          echo "major_tag=${MAJOR_TAG}" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tags
+        if: steps.semver.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NEW_TAG="${{ steps.semver.outputs.new_tag }}"
+          MAJOR_TAG="${{ steps.semver.outputs.major_tag }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag "${NEW_TAG}"
+          git tag -fa "${MAJOR_TAG}" -m "Update ${MAJOR_TAG} to ${NEW_TAG}"
+
+          git push origin "${NEW_TAG}"
+          git push origin "${MAJOR_TAG}" --force
+
+      - name: Build Release Notes
+        if: steps.semver.outputs.should_release == 'true'
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PREV="${{ steps.semver.outputs.previous_tag }}"
+          NEW="${{ steps.semver.outputs.new_tag }}"
+
+          if [[ "${PREV}" == "v0.0.1" ]]; then
+            LOG_RANGE="${NEW}"
+          else
+            LOG_RANGE="${PREV}..${NEW}"
+          fi
+
+          {
+            echo "notes<<'EOF'"
+            echo "## Central Workflow Release ${NEW}"
+            echo
+            echo "Bump Type: **${{ steps.semver.outputs.bump_type }}**"
+            echo
+            echo "### Included commits"
+            git log ${LOG_RANGE} --pretty=format:'- %s (%h)'
+            echo
+            echo
+            echo "### Consumer Guidance"
+            echo "- Pin to immutable tag: \`${NEW}\` for strict reproducibility."
+            echo "- Or consume moving major tag: \`${{ steps.semver.outputs.major_tag }}\` for auto-adoption of non-breaking changes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.sember.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@2
+        with:
+          tag_name: ${{ steps.semver.outputs.new_tag }}
+          name: ${{ steps.semver.outputs.new_tag }}
+          body: ${{ steps.notes.outputs.notes }}
+          generate_release_notes: false
+
+      - name: Skip Summary
+        if: steps.semver.outputs.should_release != 'true'
+        run: echo "No releasable conventional commit found; release skipped"

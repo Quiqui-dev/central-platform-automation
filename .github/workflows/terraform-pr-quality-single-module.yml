@@ -1,0 +1,271 @@
+name: Reusable Terraform PR Quality Gate (Single Module)
+
+on:
+  workflow_call:
+    inputs:
+      terraform-path:
+        description: "Path to terraform module root in the consuming repo"
+        required: false
+        type: string
+        default: "."
+      base-sha:
+        description: Base commit SHA for PR diff (required for central cross-repo caller mode)
+        required: false
+        type: string
+        default: ""
+      head-sha:
+        description: Head commit SHA for PR diff (required for central cross-repo caller mode)
+        required: false
+        type: string
+        default: ""
+      pr-number:
+        description: Pull request number for PR comment posting in central caller mode
+        required: false
+        type: number
+        default: 0
+      run-tfsec:
+        description: Run tfsec security scan.
+        required: false
+        type: boolean
+        default: true
+      run-only-if-tf-changed:
+        description: skip checks when no tf source/test files changed in PR scope
+        required: false
+        type: boolean
+        default: true
+      post-pr-comment:
+        description: Post/update PR Summary comment.
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    name: Validate terraform module
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Terraform file changes in PR scope
+        id: changes
+        shell: bash
+        env:
+          TERRAFORM_PATH: ${{ inputs.terraform-path }}
+        run: |
+          set -euo pipefail
+
+          BASE_SHA="${{ inputs.base-sha }}"
+          HEAD_SHA="${{ inputs.head-sha }}"
+
+          if [[ -z "$BASE_SHA" && "${{github.event_name}}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha}}"
+          fi
+
+          if [[ -z "$HEAD_SHA" && "${{github.event_name}}" == "pull_request" ]]; then
+            HEAD_SHA="${{ github.event.pull_request.head.sha}}"
+          fi
+
+          if [[ -z "$BASE_SHA" || -z "$HEAD_SHA"]]; then
+            echo "run_checks=true" >> "$GITHUB_OUTPUT"
+            echo "changed_tf_count=unknown" >> "$GITHUB_OUTPUT"
+            echo "No base/head SHA provided; running checks by default"
+            exit 0
+          fi
+
+          CHANGED_TF_COUNT=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" -- "${TERRAFORM_PATH}" | grep -E '\.tf$|\.tftest\.hcl$' | wc -l | tr -f ' ' || true)
+          CHANGED_TF_COUNT=${CHANGED_TF_COUNT:-0}
+
+          if [[ "${{ inputs.run-only-if-tf-changed }}" == "true"]]; then
+            if [[ "${CHANGED_TF_COUNT}" -gt 0 ]]; then
+              echo "run_checks=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run_checks=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "run_checks=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "changed_tf_count=${CHANGED_TF_COUNT}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Terraform
+        if: steps.changes.outputs.run_checks == 'true'
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup TFLint
+        if: steps.changes.outputs.run_checks == 'true'
+        uses: terraform-linters/setup-tflint@v4
+
+      - name: Setup tfsec
+        if: steps.changes.outputs.run_checks == 'true'
+        uses: aquasecurity/setup-tfsec@v1
+
+      - name: Run quality and security checks
+        if: steps.changes.outputs.run_checks == 'true'
+        id: checks
+        shell: bash
+        env:
+          TERRAFORM_PATH: ${{ inputs.terraform-path }}
+          RUN_TFSEC: ${{ inputs.run-tfsec }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+
+          run_and_capture() {
+            local name="$1"
+            local cmd="$2"
+            local var_names="$3"
+            local logfile="reports/${name}.log"
+            set +e
+            bash -lc "${cmd}" > "${logfile}" 2>&1
+            local code=$?
+            set -e
+
+            echo "${name}_exit=${code}" >> "$GITHUB_OUTPUT"
+            printf -v "$var-name" '%s' "$code"
+            if [[ $code -eq 0 ]]; then
+              echo "${name}: PASS"
+            else
+              echo "${name}: FAIL"
+            fi
+          }
+
+          pushd "${TERRAFORM_PATH}" > /dev/null
+          run_and_capture "fmt" "terraform fmt -check -recursive" "FMT_EXIT"
+          run_and_capture "init" "terraform init -backend=false" "INIT_EXIT"
+          run_and_capture "validate" "terraform validate" "VALIDATE_EXIT"
+          run_and_capture "test" "terraform test" "TEST_EXIT"
+          run_and_capture "tflint" "tflint --init && tflint" "TFLINT_EXIT"
+
+          if [[ "${RUN_TFSEC}" == "true" ]]; then
+            run_and_capture "tfsec" "tfsec --no-color ." "TFSEC_EXIT"
+          else
+            TFSEC_EXIT=0
+            echo "tfsec_exit=0" >> "$GITHUB_OUTPUT"
+            echo "tfsec: SKIPPED"
+          fi
+
+          popd > /dev/null
+
+          FAILED=0
+
+          for code in "$FMT_EXIT" "$INIT_EXIT" "$VALIDATE_EXIT" "$TEST_EXIT" "$TFLINT_EXIT" "$TFSEC_EXIT"; do
+            if [[ "$code" != "0" ]]; then
+              FAILED=1
+              break
+            fi
+          done
+
+          echo "failed=${FAILED}" >> "$GITHUB_OUTPUT"
+
+      - name: Build PR Summary
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{steps.changes.outputs.run_checks}}" == "true" ]]; then
+            {
+              echo 'comment<<EOF'
+              echo '<!-- terraform-pr-quality-summary -->'
+              echo '## Terraform PR Validation Summary'
+              echo
+              echo '- INFO No Terraform Source or Test changes detected in scope'
+              echo
+              echo '**Result:** PASS (nothing to validate)'
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          to_status() {
+            if [[ "$1" == "0" ]]; then
+              echo "PASS"
+            else
+              echo "FAIL"
+            fi
+          }
+
+          FMT_STATUS=$(to_status "{{steps.checks.output.fmt_exit}}")
+          INIT_STATUS=$(to_status "{{steps.checks.output.init_exit}}")
+          VALIDATE_STATUS=$(to_status "{{steps.checks.output.validate_exit}}")
+          TEST_STATUS=$(to_status "{{steps.checks.output.test_exit}}")
+          TFLINT_STATUS=$(to_status "{{steps.checks.output.tflint_exit}}")
+          TFSEC_STATUS=$(to_status "{{steps.checks.output.tfsec_exit}}")
+
+          OVERALL="PASS"
+          if [[ "${{ steps.checks.output.failed }}" == "1"]];
+            OVERALL="FAILED"
+          fi
+
+          {
+            echo 'comment<<EOF'
+            echo '<!-- terraform-pr-quality-summary -->'
+            echo '## Terraform PR Validation Summary'
+            echo
+            echo 'Check: `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `terraform test`, `tflint`, `tfsec`'
+            echo
+            echo '| Scope | Overall | fmt | init | validate | test | tflint | tfsec |'
+            echo '|---|---|---|---|---|---|---|---|'
+            echo '| ${{inputs.terraform-path}} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |'
+            echo
+            if [[ "${OVERALL}" == "PASS" ]]; then
+              echo '**Result:** PASS (quality/security checks passed)'
+            else
+              echo '**Result:** FAIL (quality/security checks failed)'
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: create or update pr comment
+        if: inputs.post-pr-comment && (github.event_name == 'pull_request' || inputs.pr-number > 0)
+        uses: actions/github-script@v7
+        env:
+          SUMMARY_COMMENT: ${{steps.summary.outputs.comment}}
+        with:
+          script: |
+            const marker = '<!-- terraform-pr-quality-summary -->';
+            const body = process.env.SUMMARY_COMMENT;
+
+            const {owner, repo} = context.repo;
+            const issue_number = Number('${{inputs.pr-number}}') || context.issue.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+      - name: fail pipeline if checks failed
+        if: steps.changes.outputs.run_checks == 'true' && steps.checks.outputs.failed == '1'
+        shell: bash
+        run: |
+          echo "One or more quality/security checks failed"
+          exit 1
