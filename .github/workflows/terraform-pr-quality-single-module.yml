@@ -63,12 +63,12 @@ jobs:
         id: changes
         shell: bash
         env:
-          TERRAFORM_PATH: ${{ inputs.terraform-path }}
+          TERRAFORM_PATH: ${{ inputs['terraform-path'] }}
         run: |
           set -euo pipefail
 
-          BASE_SHA="${{ inputs.base-sha }}"
-          HEAD_SHA="${{ inputs.head-sha }}"
+          BASE_SHA="${{ inputs['base-sha'] }}"
+          HEAD_SHA="${{ inputs['head-sha'] }}"
 
           if [[ -z "$BASE_SHA" && "${{github.event_name}}" == "pull_request" ]]; then
             BASE_SHA="${{ github.event.pull_request.base.sha}}"
@@ -88,7 +88,7 @@ jobs:
           CHANGED_TF_COUNT=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" -- "${TERRAFORM_PATH}" | grep -E '\.tf$|\.tftest\.hcl$' | wc -l | tr -f ' ' || true)
           CHANGED_TF_COUNT=${CHANGED_TF_COUNT:-0}
 
-          if [[ "${{ inputs.run-only-if-tf-changed }}" == "true"]]; then
+          if [[ "${{ inputs['run-only-if-tf-changed'] }}" == "true"]]; then
             if [[ "${CHANGED_TF_COUNT}" -gt 0 ]]; then
               echo "run_checks=true" >> "$GITHUB_OUTPUT"
             else
@@ -123,8 +123,8 @@ jobs:
         id: checks
         shell: bash
         env:
-          TERRAFORM_PATH: ${{ inputs.terraform-path }}
-          RUN_TFSEC: ${{ inputs.run-tfsec }}
+          TERRAFORM_PATH: ${{ inputs['terraform-path'] }}
+          RUN_TFSEC: ${{ inputs['run-tfsec'] }}
         run: |
           set -euo pipefail
           mkdir -p reports
@@ -212,7 +212,7 @@ jobs:
           TFSEC_STATUS=$(to_status "{{steps.checks.output.tfsec_exit}}")
 
           OVERALL="PASS"
-          if [[ "${{ steps.checks.output.failed }}" == "1"]];
+          if [[ "${{ steps.checks.outputs.failed }}" == "1"]];
             OVERALL="FAILED"
           fi
 
@@ -225,7 +225,7 @@ jobs:
             echo
             echo '| Scope | Overall | fmt | init | validate | test | tflint | tfsec |'
             echo '|---|---|---|---|---|---|---|---|'
-            echo '| ${{inputs.terraform-path}} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |'
+            echo '| ${{inputs['terraform-path']}} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |'
             echo
             if [[ "${OVERALL}" == "PASS" ]]; then
               echo '**Result:** PASS (quality/security checks passed)'
@@ -241,13 +241,13 @@ jobs:
         env:
           SUMMARY_COMMENT: ${{steps.summary.outputs.comment}}
         with:
-          github-token: ${{ secrets.github-token || github.token }}
+          github-token: ${{ secrets['github-token'] || github.token }}
           script: |
             const marker = '<!-- terraform-pr-quality-summary -->';
             const body = process.env.SUMMARY_COMMENT;
 
             const {owner, repo} = context.repo;
-            const issue_number = Number('${{inputs.pr-number}}') || context.issue.number;
+            const issue_number = Number('${{inputs['pr-number']}}') || context.issue.number;
 
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner,
