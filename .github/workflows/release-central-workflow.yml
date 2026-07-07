@@ -130,7 +130,7 @@ jobs:
           fi
 
           {
-            echo "notes<<'EOF'"
+            echo "notes<<GH_NOTES_EOF"
             echo "## Central Workflow Release ${NEW}"
             echo
             echo "Bump Type: **${{ steps.semver.outputs.bump_type }}**"
@@ -142,7 +142,7 @@ jobs:
             echo "### Consumer Guidance"
             echo "- Pin to immutable tag: \`${NEW}\` for strict reproducibility."
             echo "- Or consume moving major tag: \`${{ steps.semver.outputs.major_tag }}\` for auto-adoption of non-breaking changes"
-            echo "EOF"
+            echo "GH_NOTES_EOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
