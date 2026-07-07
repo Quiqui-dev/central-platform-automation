@@ -37,9 +37,14 @@ jobs:
 
           echo "Latest tag: ${LATEST_TAG}"
 
-          MAJOR=$(echo "${LATEST_TAG}" | cut -d. -f1)
-          MINOR=$(echo "${LATEST_TAG}" | cut -d. -f2)
-          PATCH=$(echo "${LATEST_TAG}" | cut -d. -f3)
+          if [[ "${LATEST_TAG}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+          else
+            echo "Latest tag '${LATEST_TAG}' is not in expected format: vX.Y.Z"
+            exit 1
+          fi
 
           if [[ "${LATEST_TAG}" == "v0.0.1" ]]; then
             RANGE="HEAD"
@@ -82,7 +87,7 @@ jobs:
           esac
 
           NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
-          MAJOR_TAG="v${MAJOR}"
+          MAJOR_TAG="$(echo "${NEW_TAG}" | sed -E 's/^v([0-9]+)\..*/v\1/')"
 
           echo "bump_type=${BUMP_TYPE}" >> "$GITHUB_OUTPUT"
           echo "new_tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
