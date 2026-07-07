@@ -257,9 +257,9 @@ jobs:
 
           echo "failed=${FAILED}" >> "$GITHUB_OUTPUT"
 
-      - name: Build PR Summary
-        id: summary
-        shell: bash
+      - name: create or update pr comment
+        if: inputs['post-pr-comment'] && (github.event_name == 'pull_request' || inputs['pr-number'] > 0)
+        uses: actions/github-script@v7
         env:
           REPORTS_DIR: ${{ github.workspace }}/reports
           RUN_CHECKS: ${{ steps.changes.outputs.run_checks }}
@@ -272,182 +272,68 @@ jobs:
           FAILED_FLAG: ${{ steps.checks.outputs.failed }}
           RUN_URL: ${{ github.server_url }}/${{github.repository}}/actions/runs/${{github.run_id}}
           RUN_ATTEMPT: ${{github.run_attempt}}
-        run: |
-          set -euo pipefail
-          COMMENT_FILE="$(mktemp)"
-
-          to_status() {
-            code="$1"
-            if [ -z "${code}" ]; then
-              echo "UNKNOWN"
-            elif [ "${code}" == "0" ]; then
-              echo "PASS"
-            else
-              echo "FAIL"
-            fi
-          }
-
-          if [ "${RUN_CHECKS} != "true" ]; then
-            cat > "${COMMENT_FILE}" <<EOF {
-              <!-- terraform-pr-quality-summary:reusable-single-module -->
-              ## Terraform PR Validation Summary
-              
-              - INFO No Terraform Source or Test changes detected in scope
-              
-              **Result:** PASS (nothing to validate)
-            EOF
-          else
-
-            FMT_STATUS=$(to_status "${FMT_STATUS}")
-            INIT_STATUS=$(to_status "${INIT_STATUS}")
-            VALIDATE_STATUS=$(to_status "${VALIDATE_STATUS}")
-            TEST_STATUS=$(to_status "${TEST_STATUS}")
-            TFLINT_STATUS=$(to_status "${TFLINT_STATUS}")
-            TFSEC_STATUS=$(to_status "${TFSEC_STATUS}")
-
-            OVERALL="PASS"
-            if [ "${FAILED_FLAG}" == "1"]; then
-              OVERALL="FAILED"
-            fi
-
-            INIT_ERROR_SNIPPET=""
-            if [ "${INIT_STATUS}" == "FAIL" ]; then
-              if [ -f "${REPORTS_DIR}/init.log" ]; then
-                INIT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/init.log" || true)
-              fi
-            fi
-
-            FMT_ERROR_SNIPPET=""
-            if [ "${FMT_STATUS}" == "FAIL"]; then 
-              if [ -f "${REPORTS_DIR}/fmt.log" ]]; then
-                FMT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/fmt.log" || true)
-              fi
-            fi
-
-            VALIDATE_ERROR_SNIPPET=""
-            if [ "${VALIDATE_STATUS}" == "FAIL"]; then 
-              if [ -f "${REPORTS_DIR}/validate.log" ]]; then
-                VALIDATE_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/validate.log" || true)
-              fi
-            fi
-
-            TFSEC_ERROR_SNIPPET=""
-            if [ "${TFSEC_STATUS}" == "FAIL"]; then 
-              if [ -f "${REPORTS_DIR}/tfsec.log" ]]; then
-                TFSEC_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tfsec.log" || true)
-              fi
-            fi
-
-            TFLINT_ERROR_SNIPPET=""
-            if [ "${TFLINT_STATUS}" == "FAIL"]; then 
-              if [ -f "${REPORTS_DIR}/tflint.log" ]]; then
-                TFLINT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tflint.log" || true)
-              fi
-            fi
-
-            TEST_ERROR_SNIPPET=""
-            if [ "${TEST_STATUS}" == "FAIL"]; then 
-              if [ -f "${REPORTS_DIR}/test.log" ]]; then
-                TEST_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/test.log" || true)
-              fi
-            fi
-
-            cat > "${COMMENT_FILE}" <<EOF
-              <!-- terraform-pr-quality-summary:reusable-single-module -->
-              ## Terraform PR Validation Summary
-
-              Run: ${RUN_URL} (attempt ${RUN_ATTEMPT})
-              
-              Check: `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `terraform test`, `tflint`, `tfsec`
-              
-              | Scope | Overall | fmt | init | validate | test | tflint | tfsec |
-              |---|---|---|---|---|---|---|---|
-              | ${{inputs['terraform-path']}} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |
-              EOF
-              
-            if [ "${OVERALL}" == "PASS" ]; then
-              echo >> "${COMMENT_FILE}"
-              echo '**Result:** PASS (quality/security checks passed)' >> "${COMMENT_FILE}"
-            else
-              echo >> "${COMMENT_FILE}"
-              echo '**Result:** FAIL (quality/security checks failed)' >> "${COMMENT_FILE}"
-            fi
-            if [ -n "${INIT_ERROR_SNIPPET}" ]; then
-              {
-              echo
-              echo '### terraform init error (last 60 lines)'
-              echo '```text'
-              echo '${INIT_ERROR_SNIPPET}'
-              echo '```'
-              } >> "${COMMENT_FILE}"
-            fi
-            if [ -n "${VALIDATE_ERROR_SNIPPET}" ]; then
-              {
-              echo
-              echo '### terraform validate error (last 60 lines)'
-              echo '```text'
-              echo '${VALIDATE_ERROR_SNIPPET}'
-              echo '```'
-              } >> "${COMMENT_FILE}"
-            fi
-            if [ -n "${FMT_ERROR_SNIPPET}" ]; then
-              {
-              echo
-              echo '### terraform fmt error (last 60 lines)'
-              echo '```text'
-              echo '${FMT_ERROR_SNIPPET}'
-              echo '```'
-              } >> "${COMMENT_FILE}"
-            fi
-            if [ -n "${TEST_ERROR_SNIPPET}" ]; then
-              {
-              echo
-              echo '### terraform test error (last 60 lines)'
-              echo '```text'
-              echo '${TEST_ERROR_SNIPPET}'
-              echo '```'
-              } >> "${COMMENT_FILE}"
-            fi
-            if [ -n "${TFLINT_ERROR_SNIPPET}" ]; then
-              {
-              echo
-              echo '### tflint error (last 60 lines)'
-              echo '```text'
-              echo '${TFLINT_ERROR_SNIPPET}'
-              echo '```'
-              } >> "${COMMENT_FILE}"
-            fi
-            if [ -n "${TFSEC_ERROR_SNIPPET}" ]; then
-              {
-              echo
-              echo '### tfsec error (last 60 lines)'
-              echo '```text'
-              echo '${TFSEC_ERROR_SNIPPET}'
-              echo '```'
-              } >> "${COMMENT_FILE}"
-            fi
-          fi
-
-          DELIM="COMMENT_EOF_$(date +%s)_$RANDOM" 
-          {
-            echo "comment<<${DELIM}"
-            cat "${COMMENT_FILE}"
-            echo "${DELIM}"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: create or update pr comment
-        if: inputs['post-pr-comment'] && (github.event_name == 'pull_request' || inputs['pr-number'] > 0)
-        uses: actions/github-script@v7
-        env:
-          SUMMARY_COMMENT: ${{steps.summary.outputs.comment}}
+          TERRAFORM_PATH_INPUT: ${{inputs['terraform-path']}}
         with:
           github-token: ${{ secrets['github-token'] || github.token }}
           script: |
+            const fs = require('fs');
+            const path = require('path');
             const marker = '<!-- terraform-pr-quality-summary:reusable-single-module -->';
-            const body = process.env.SUMMARY_COMMENT;
+
+            const toStatus = (value) => {
+              if (value === undefined || value === null || valle === '') return 'UNKNOWN';
+              return String(value) === '0' ? 'PASS' : 'FAIL';
+            }
+
+            const runChecks = process.env.RUN_CHECKS;
+            let body = `${marker}\n## Terraform PR Validation Summary\n\n`;
+
+            if (runChecks !== 'true') {              
+              body += '- INFO No Terraform Source or Test changes detected in scope.\n\n';
+              body += '**Result:** PASS (nothing to validate)';
+            } else {
+              const fmtStatus = toStatus(proces.env.FMT_EXIT); 
+              const initStatus = toStatus(proces.env.INIT_EXIT);
+              const validateStatus = toStatus(proces.env.VALIDATE_EXIT);
+              const testStatus = toStatus(proces.env.TEST_EXIT);
+              const tflintStatus = toStatus(proces.env.TFLINT_EXIT);
+              const tfsecStatus = toStatus(proces.env.TFSEC_EXIT);
+              const overall = process.env.FAILED_FLAG === '1' ? 'FAIL' : 'PASS';
+
+              body += `Run: ${process.env.RUN_URL} (attempt ${process.env.RUN_ATTEMPT})\n\n`;
+              body += 'Check: `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `terraform test`, `tflint`, `tfsec`\n\n';
+              body += '| Scope | Overall | fmt | init | validate | test | tflint | tfsec |\n';
+              body += '|---|---|---|---|---|---|---|---|\n';
+              body += `| ${process.env.TERRAFORM_PATH_INPUT} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |\n\n`;
+
+              if (overall === 'PASS') {
+                body += '**Result:** PASS (quality/security checks passed)';
+              } else {
+                body += '**Result:** FAIL (quality/security checks failed)';
+              }
+              
+              const reportsDir = process.env.REPORTS_DIR || path.join(process.cwd(), 'reports');
+              const appendErrorSnippet = (title, fileName, shouldAppend) => {
+                if (!shouldAppend) return;
+                const filePath = path.join(reportsDir, fileName);
+                if (!fs.existsSync(filePath)) return;
+                const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+                const snippet = lines.slice(-60).join('\n').trim();
+                if (!snippet) return;
+                body += `\n\n### ${title}\n\n\`\`\`text\n${snippet}\n\`\`\``;
+              }
+
+              appendErrorSnippet('terraform init error (last 60 lines)', 'init.log', initStatus === 'FAIL');
+              appendErrorSnippet('terraform validate error (last 60 lines)', 'validate.log', validateStatus === 'FAIL');
+              appendErrorSnippet('terraform fmt error (last 60 lines)', 'fmt.log', fmtStatus === 'FAIL');
+              appendErrorSnippet('terraform test error (last 60 lines)', 'test.log', testStatus === 'FAIL');
+              appendErrorSnippet('tflint error (last 60 lines)', 'tflint.log', tflintStatus === 'FAIL');
+              appendErrorSnippet('tfsec error (last 60 lines)', 'tfsec.log', tfsecStatus === 'FAIL');
+
+            }
 
             if (!body || body.trim().length === 0) {
-              core.setFailed('SUMMARY_COMMENT is empty; vannot create/update PR comment.')
+              core.setFailed('Summary body is empty; vannot create/update PR comment.')
               return;
             }
 
