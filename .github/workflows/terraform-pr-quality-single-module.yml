@@ -77,23 +77,22 @@ jobs:
           BASE_SHA="${BASE_SHA_INPUT}"
           HEAD_SHA="${HEAD_SHA_INPUT}"
 
-          if [ -z "$BASE_SHA" ] && [ "${EVENT_NAME}" = "pull_request"] ; then
+          if [[ -z "$BASE_SHA" && "${EVENT_NAME}" = "pull_request"]] ; then
             BASE_SHA="${PR_BASE_SHA}"
           fi
 
-          if [ -z "$HEAD_SHA"] && ["${EVENT_NAME}" = "pull_request" ]; then
+          if [[ -z "$HEAD_SHA" && "${EVENT_NAME}" = "pull_request" ]]; then
             HEAD_SHA="${PR_HEAD_SHA}"
           fi
 
-          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
+          if [[ -z "$BASE_SHA"  || -z "$HEAD_SHA" ]]; then
             echo "run_checks=true" >> "$GITHUB_OUTPUT"
             echo "changed_tf_count=unknown" >> "$GITHUB_OUTPUT"
             echo "No base/head SHA provided running checks by default"
             exit 0
           fi
 
-          SCOPE_PATH="${TERRAFORM_PATH}"
-          SCOPE_PATH="${SCOPE_PATH#./}"
+          SCOPE_PATH="${TERRAFORM_PATH#./}"
           SCOPE_PATH="${SCOPE_PATH%/}"
 
           if ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null; then
@@ -105,13 +104,15 @@ jobs:
           fi
 
           # fallback when SHAs not directly fetchable in PR context
-          if { ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; } && [ "${EVENT_NAME}" == "pull_request"] && [ -n "${PR_BASE_REF}"]; then
-            echo "falling back to PR base ref comparison using origin/${PR_BASE_REF}"
-            git fetch --no-tags --depth=1 origin "${PR_BASE_REF}" || true
-            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
-              BASE_SHA="$(git rev-parse FETCH_HEAD)"
-              HEAD_SHA="$(git rev-parse HEAD)"
-              echo "Fallback SHAs resolved: base=${BASE_SHA} head=${HEAD_SHA}"
+          if { ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; }; then
+            if [[ "${EVENT_NAME}" == "pull_request" &&  -n "${PR_BASE_REF}"]]; then
+              echo "falling back to PR base ref comparison using origin/${PR_BASE_REF}"
+              git fetch --no-tags --depth=1 origin "${PR_BASE_REF}" || true
+              if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
+                BASE_SHA="$(git rev-parse FETCH_HEAD)"
+                HEAD_SHA="$(git rev-parse HEAD)"
+                echo "Fallback SHAs resolved: base=${BASE_SHA} head=${HEAD_SHA}"
+              fi
             fi
           fi
 
@@ -123,7 +124,7 @@ jobs:
           fi
 
           DIFF_OUTPUT=""
-          if ! DIFF_OUTPUT=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}"); then
+          if ! DIFF_OUTPUT="$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")"; then
             echo "git diff failed; running checks by default."
             echo "run_checks=true" >> "$GITHUB_OUTPUT"
             echo "changed_tf_count=unknown" >> "$GITHUB_OUTPUT"
@@ -161,8 +162,8 @@ jobs:
             echo "Terraform-related changed files (0): none"
           fi
 
-          if [ "${RUN_ONLY_IF_TF_CHANGED}" = "true"; then
-            if [ "${CHANGED_TF_COUNT}" -gt 0 ; then
+          if [[ "${RUN_ONLY_IF_TF_CHANGED}" = "true" ]]; then
+            if [[ "${CHANGED_TF_COUNT}" -gt 0 ]]; then
               echo "run_checks=true" >> "$GITHUB_OUTPUT"
             else
               echo "run_checks=false" >> "$GITHUB_OUTPUT"
