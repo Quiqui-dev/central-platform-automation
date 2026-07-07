@@ -275,7 +275,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${RUN_CHECKS} != "true" ]]; then
+          if [ "${RUN_CHECKS} != "true" ]; then
             {
               echo 'comment<<EOF'
               echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
@@ -292,9 +292,9 @@ jobs:
 
           to_status() {
             local code="$1"
-            if [[ -z "${code}" ]]; then
+            if [ -z "${code}" ]; then
               echo "UNKNOWN"
-            elif [[ "${code}" == "0" ]]; then
+            elif [ "${code}" == "0" ]; then
               echo "PASS"
             else
               echo "FAIL"
@@ -314,33 +314,45 @@ jobs:
           fi
 
           INIT_ERROR_SNIPPET=""
-          if [[ "${INIT_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/init.log" ]]; then
-            INIT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/init.log" || true)
+          if [ "${INIT_STATUS}" == "FAIL" ]; then
+            if [ -f "${REPORTS_DIR}/init.log" ]; then
+              INIT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/init.log" || true)
+            fi
           fi
 
           FMT_ERROR_SNIPPET=""
-          if [[ "${FMT_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/fmt.log" ]]; then
-            FMT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/fmt.log" || true)
+          if [ "${FMT_STATUS}" == "FAIL"]; then 
+            if [ -f "${REPORTS_DIR}/fmt.log" ]]; then
+              FMT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/fmt.log" || true)
+            fi
           fi
 
           VALIDATE_ERROR_SNIPPET=""
-          if [[ "${VALIDATE_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/validate.log" ]]; then
-            VALIDATE_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/validate.log" || true)
+          if [ "${VALIDATE_STATUS}" == "FAIL"]; then 
+            if [ -f "${REPORTS_DIR}/validate.log" ]]; then
+              VALIDATE_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/validate.log" || true)
+            fi
           fi
 
           TFSEC_ERROR_SNIPPET=""
-          if [[ "${TFSEC_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/tfsec.log" ]]; then
-            TFSEC_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tfsec.log" || true)
+          if [ "${TFSEC_STATUS}" == "FAIL"]; then 
+            if [ -f "${REPORTS_DIR}/tfsec.log" ]]; then
+              TFSEC_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tfsec.log" || true)
+            fi
           fi
 
           TFLINT_ERROR_SNIPPET=""
-          if [[ "${TFLINT_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/tflint.log" ]]; then
-            TFLINT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tflint.log" || true)
+          if [ "${TFLINT_STATUS}" == "FAIL"]; then 
+            if [ -f "${REPORTS_DIR}/tflint.log" ]]; then
+              TFLINT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tflint.log" || true)
+            fi
           fi
 
           TEST_ERROR_SNIPPET=""
-          if [[ "${TEST_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/test.log" ]]; then
-            TEST_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/test.log" || true)
+          if [ "${TEST_STATUS}" == "FAIL"]; then 
+            if [ -f "${REPORTS_DIR}/test.log" ]]; then
+              TEST_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/test.log" || true)
+            fi
           fi
 
           {
