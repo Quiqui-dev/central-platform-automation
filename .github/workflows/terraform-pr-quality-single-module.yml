@@ -77,15 +77,19 @@ jobs:
           BASE_SHA="${BASE_SHA_INPUT}"
           HEAD_SHA="${HEAD_SHA_INPUT}"
 
-          if [[ -z "$BASE_SHA" && "${EVENT_NAME}" = "pull_request"]]; then
-            BASE_SHA="${PR_BASE_SHA}"
+          if [ -z "$BASE_SHA"]; then
+            if ["${EVENT_NAME}" = "pull_request"]; then
+              BASE_SHA="${PR_BASE_SHA}"
+            fi
           fi
 
-          if [[ -z "$HEAD_SHA" && "${EVENT_NAME}" = "pull_request" ]]; then
-            HEAD_SHA="${PR_HEAD_SHA}"
+          if [ -z "$HEAD_SHA"]; then 
+            if ["${EVENT_NAME}" = "pull_request" ]; then
+              HEAD_SHA="${PR_HEAD_SHA}"
+            fi
           fi
 
-          if [[ -z "$BASE_SHA"  || -z "$HEAD_SHA" ]]; then
+          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
             echo "run_checks=true" >> "$GITHUB_OUTPUT"
             echo "changed_tf_count=unknown" >> "$GITHUB_OUTPUT"
             echo "No base/head SHA provided running checks by default"
@@ -105,7 +109,7 @@ jobs:
 
           # fallback when SHAs not directly fetchable in PR context
           if ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; then
-            if [[ "${EVENT_NAME}" == "pull_request" &&  -n "${PR_BASE_REF}"]]; then
+            if [ "${EVENT_NAME}" == "pull_request"] && [ -n "${PR_BASE_REF}"]; then
               echo "falling back to PR base ref comparison using origin/${PR_BASE_REF}"
               git fetch --no-tags --depth=1 origin "${PR_BASE_REF}" || true
               if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
@@ -131,45 +135,46 @@ jobs:
             exit 0
           fi
 
-          mapfile -t ALL_CHANGED_FILES < <(printf '%s\n' "${DIFFO=_OUTPUT}")
+          CHANGED_TF_COUNT=0
+          MATCHED_FILES=""
 
-          if [ "${SCOPE_PATH}" = "." ] || [ -z "${SCOPE_PATH}" ]; then
-            SCOPED_FILES=("${ALL_CHANGED_FILES[@]}")
-          else
-            SCOPED_FILES=()
-            for file in "${ALL_CHANGED_FILES[@]}"; do
-              if [ "$file" = "${SCOPED_PATH}"] || [[ "$file" == "${SCOPED_PATH}/"* ]]; then
-                SCOPED_FILES+=("$file")
-              fi
-            done
-          fi
+          while IFS= read -r file; do
+            if [ -z "${file}" ]; then
+              continue
+            fi
 
-          TF_CHANGED_FILES=()
-          for file in "${SCOPED_FILES[@]}"; do
+            in_scope=false
+            if [ -z "${SCOPE_PATH}" ] || [ "${SCOPE_PATH}" = "."]; then
+              in_scope=true
+            else
+              case "${file}" in
+                "${SCOPE_PATH}"|"${SCOPE_PATH}/*")
+                  in_scope=true
+                  ;;
+              esac
+            fi
+
+            if [ "${in_scope}" != "true"]; then
+              continue
+            fi
+
             case "$file" in
               *.tf|*.tfvar|*.tf.json|*.tftest.hcl)
-                TF_CHANGED_FILES+=("$file")
+                CHANGED_TF_COUNT=$((CHANGED_TF_COUNT + 1))
+                MATCHED_FILES+= " - ${file}"$'\n'
                 ;;
-          done
+            esac
+          done <<< "${DIFF_OUTPUT}"
 
-          CHANGED_TF_COUNT="${#TF_CHANGED_FILES[@]}"
-
-          echo "detected changed files in scope (${SCOPE_PATH:-.}): ${#SCOPED_FILES[@]}"
+          echo "Terraform-related changed files (${CHANGED_TF_COUNT}) in scope (${SCOPE_PATH:-.})."
           if [ "${CHANGED_TF_COUNT}" -gt 0]; then
-            echo "Terraform-related changed files (${CHANGED_TF_COUNT}):"
-            printf ' - %s\n' "${TF_CHANGED_FILES[@]}"
-          else
-            echo "Terraform-related changed files (0): none"
+            printf '%s' "${MATCHED_FILES}"
           fi
 
-          if [[ "${RUN_ONLY_IF_TF_CHANGED}" = "true" ]]; then
-            if [[ "${CHANGED_TF_COUNT}" -gt 0 ]]; then
-              echo "run_checks=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "run_checks=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
+          if [ "${RUN_ONLY_IF_TF_CHANGED}" = "true" ] && [ "${CHANGED_TF_COUNT}" -eq 0]; then
             echo "run_checks=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_checks=false" >> "$GITHUB_OUTPUT"
           fi
 
           echo "changed_tf_count=${CHANGED_TF_COUNT}" >> "$GITHUB_OUTPUT"
