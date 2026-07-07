@@ -274,24 +274,10 @@ jobs:
           RUN_ATTEMPT: ${{github.run_attempt}}
         run: |
           set -euo pipefail
-
-          if [ "${RUN_CHECKS} != "true" ]; then
-            {
-              echo 'comment<<EOF'
-              echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
-              echo '## Terraform PR Validation Summary'
-              echo
-              echo '- INFO No Terraform Source or Test changes detected in scope'
-              echo
-              echo '**Result:** PASS (nothing to validate)'
-              echo
-              echo 'EOF'
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          COMMENT_FILE="$(mktemp)"
 
           to_status() {
-            local code="$1"
+            code="$1"
             if [ -z "${code}" ]; then
               echo "UNKNOWN"
             elif [ "${code}" == "0" ]; then
@@ -301,121 +287,152 @@ jobs:
             fi
           }
 
-          FMT_STATUS=$(to_status "${FMT_STATUS}")
-          INIT_STATUS=$(to_status "${INIT_STATUS}")
-          VALIDATE_STATUS=$(to_status "${VALIDATE_STATUS}")
-          TEST_STATUS=$(to_status "${TEST_STATUS}")
-          TFLINT_STATUS=$(to_status "${TFLINT_STATUS}")
-          TFSEC_STATUS=$(to_status "${TFSEC_STATUS}")
+          if [ "${RUN_CHECKS} != "true" ]; then
+            cat > "${COMMENT_FILE}" <<EOF {
+              <!-- terraform-pr-quality-summary:reusable-single-module -->
+              ## Terraform PR Validation Summary
+              
+              - INFO No Terraform Source or Test changes detected in scope
+              
+              **Result:** PASS (nothing to validate)
+            EOF
+          else
 
-          OVERALL="PASS"
-          if [ "${FAILED_FLAG}" == "1"]; then
-            OVERALL="FAILED"
-          fi
+            FMT_STATUS=$(to_status "${FMT_STATUS}")
+            INIT_STATUS=$(to_status "${INIT_STATUS}")
+            VALIDATE_STATUS=$(to_status "${VALIDATE_STATUS}")
+            TEST_STATUS=$(to_status "${TEST_STATUS}")
+            TFLINT_STATUS=$(to_status "${TFLINT_STATUS}")
+            TFSEC_STATUS=$(to_status "${TFSEC_STATUS}")
 
-          INIT_ERROR_SNIPPET=""
-          if [ "${INIT_STATUS}" == "FAIL" ]; then
-            if [ -f "${REPORTS_DIR}/init.log" ]; then
-              INIT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/init.log" || true)
+            OVERALL="PASS"
+            if [ "${FAILED_FLAG}" == "1"]; then
+              OVERALL="FAILED"
             fi
-          fi
 
-          FMT_ERROR_SNIPPET=""
-          if [ "${FMT_STATUS}" == "FAIL"]; then 
-            if [ -f "${REPORTS_DIR}/fmt.log" ]]; then
-              FMT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/fmt.log" || true)
+            INIT_ERROR_SNIPPET=""
+            if [ "${INIT_STATUS}" == "FAIL" ]; then
+              if [ -f "${REPORTS_DIR}/init.log" ]; then
+                INIT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/init.log" || true)
+              fi
             fi
-          fi
 
-          VALIDATE_ERROR_SNIPPET=""
-          if [ "${VALIDATE_STATUS}" == "FAIL"]; then 
-            if [ -f "${REPORTS_DIR}/validate.log" ]]; then
-              VALIDATE_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/validate.log" || true)
+            FMT_ERROR_SNIPPET=""
+            if [ "${FMT_STATUS}" == "FAIL"]; then 
+              if [ -f "${REPORTS_DIR}/fmt.log" ]]; then
+                FMT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/fmt.log" || true)
+              fi
             fi
-          fi
 
-          TFSEC_ERROR_SNIPPET=""
-          if [ "${TFSEC_STATUS}" == "FAIL"]; then 
-            if [ -f "${REPORTS_DIR}/tfsec.log" ]]; then
-              TFSEC_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tfsec.log" || true)
+            VALIDATE_ERROR_SNIPPET=""
+            if [ "${VALIDATE_STATUS}" == "FAIL"]; then 
+              if [ -f "${REPORTS_DIR}/validate.log" ]]; then
+                VALIDATE_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/validate.log" || true)
+              fi
             fi
-          fi
 
-          TFLINT_ERROR_SNIPPET=""
-          if [ "${TFLINT_STATUS}" == "FAIL"]; then 
-            if [ -f "${REPORTS_DIR}/tflint.log" ]]; then
-              TFLINT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tflint.log" || true)
+            TFSEC_ERROR_SNIPPET=""
+            if [ "${TFSEC_STATUS}" == "FAIL"]; then 
+              if [ -f "${REPORTS_DIR}/tfsec.log" ]]; then
+                TFSEC_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tfsec.log" || true)
+              fi
             fi
-          fi
 
-          TEST_ERROR_SNIPPET=""
-          if [ "${TEST_STATUS}" == "FAIL"]; then 
-            if [ -f "${REPORTS_DIR}/test.log" ]]; then
-              TEST_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/test.log" || true)
+            TFLINT_ERROR_SNIPPET=""
+            if [ "${TFLINT_STATUS}" == "FAIL"]; then 
+              if [ -f "${REPORTS_DIR}/tflint.log" ]]; then
+                TFLINT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tflint.log" || true)
+              fi
             fi
-          fi
 
-          {
-            echo 'comment<<EOF'
-            echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
-            echo '## Terraform PR Validation Summary'
-            echo
-            echo "Run: ${RUN_URL} (attempt ${RUN_ATTEMPT})"
-            echo
-            echo 'Check: `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `terraform test`, `tflint`, `tfsec`'
-            echo
-            echo '| Scope | Overall | fmt | init | validate | test | tflint | tfsec |'
-            echo '|---|---|---|---|---|---|---|---|'
-            echo "| ${{inputs['terraform-path']}} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |"
-            echo
+            TEST_ERROR_SNIPPET=""
+            if [ "${TEST_STATUS}" == "FAIL"]; then 
+              if [ -f "${REPORTS_DIR}/test.log" ]]; then
+                TEST_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/test.log" || true)
+              fi
+            fi
+
+            cat > "${COMMENT_FILE}" <<EOF
+              <!-- terraform-pr-quality-summary:reusable-single-module -->
+              ## Terraform PR Validation Summary
+
+              Run: ${RUN_URL} (attempt ${RUN_ATTEMPT})
+              
+              Check: `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `terraform test`, `tflint`, `tfsec`
+              
+              | Scope | Overall | fmt | init | validate | test | tflint | tfsec |
+              |---|---|---|---|---|---|---|---|
+              | ${{inputs['terraform-path']}} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |
+              EOF
+              
             if [ "${OVERALL}" == "PASS" ]; then
-              echo '**Result:** PASS (quality/security checks passed)'
+              echo >> "${COMMENT_FILE}"
+              echo '**Result:** PASS (quality/security checks passed)' >> "${COMMENT_FILE}"
             else
-              echo '**Result:** FAIL (quality/security checks failed)'
+              echo >> "${COMMENT_FILE}"
+              echo '**Result:** FAIL (quality/security checks failed)' >> "${COMMENT_FILE}"
             fi
             if [ -n "${INIT_ERROR_SNIPPET}" ]; then
+              {
               echo
               echo '### terraform init error (last 60 lines)'
               echo '```text'
               echo '${INIT_ERROR_SNIPPET}'
               echo '```'
+              } >> "${COMMENT_FILE}"
             fi
             if [ -n "${VALIDATE_ERROR_SNIPPET}" ]; then
+              {
               echo
               echo '### terraform validate error (last 60 lines)'
               echo '```text'
               echo '${VALIDATE_ERROR_SNIPPET}'
               echo '```'
+              } >> "${COMMENT_FILE}"
             fi
             if [ -n "${FMT_ERROR_SNIPPET}" ]; then
+              {
               echo
               echo '### terraform fmt error (last 60 lines)'
               echo '```text'
               echo '${FMT_ERROR_SNIPPET}'
               echo '```'
+              } >> "${COMMENT_FILE}"
             fi
             if [ -n "${TEST_ERROR_SNIPPET}" ]; then
+              {
               echo
               echo '### terraform test error (last 60 lines)'
               echo '```text'
               echo '${TEST_ERROR_SNIPPET}'
               echo '```'
+              } >> "${COMMENT_FILE}"
             fi
             if [ -n "${TFLINT_ERROR_SNIPPET}" ]; then
+              {
               echo
               echo '### tflint error (last 60 lines)'
               echo '```text'
               echo '${TFLINT_ERROR_SNIPPET}'
               echo '```'
+              } >> "${COMMENT_FILE}"
             fi
             if [ -n "${TFSEC_ERROR_SNIPPET}" ]; then
+              {
               echo
               echo '### tfsec error (last 60 lines)'
               echo '```text'
               echo '${TFSEC_ERROR_SNIPPET}'
               echo '```'
+              } >> "${COMMENT_FILE}"
             fi
-            echo 'EOF'
+          fi
+
+          DELIM="COMMENT_EOF_$(date +%s)_$RANDOM" 
+          {
+            echo "comment<<${DELIM}"
+            cat "${COMMENT_FILE}"
+            echo "${DELIM}"
           } >> "$GITHUB_OUTPUT"
 
       - name: create or update pr comment
