@@ -77,11 +77,11 @@ jobs:
           BASE_SHA="${BASE_SHA_INPUT}"
           HEAD_SHA="${HEAD_SHA_INPUT}"
 
-          if [ -z "$BASE_SHA"  && [ "${EVENT_NAME}" = "pull_request" ; then
+          if [ -z "$BASE_SHA" ] && [ "${EVENT_NAME}" = "pull_request"] ; then
             BASE_SHA="${PR_BASE_SHA}"
           fi
 
-          if [ -z "$HEAD_SHA" && ["${EVENT_NAME}" = "pull_request" ; then
+          if [ -z "$HEAD_SHA"] && ["${EVENT_NAME}" = "pull_request" ]; then
             HEAD_SHA="${PR_HEAD_SHA}"
           fi
 
