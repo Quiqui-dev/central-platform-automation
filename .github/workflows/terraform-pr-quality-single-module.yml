@@ -292,12 +292,12 @@ jobs:
               body += '- INFO No Terraform Source or Test changes detected in scope.\n\n';
               body += '**Result:** PASS (nothing to validate)';
             } else {
-              const fmtStatus = toStatus(proces.env.FMT_EXIT); 
-              const initStatus = toStatus(proces.env.INIT_EXIT);
-              const validateStatus = toStatus(proces.env.VALIDATE_EXIT);
-              const testStatus = toStatus(proces.env.TEST_EXIT);
-              const tflintStatus = toStatus(proces.env.TFLINT_EXIT);
-              const tfsecStatus = toStatus(proces.env.TFSEC_EXIT);
+              const fmtStatus = toStatus(process.env.FMT_EXIT); 
+              const initStatus = toStatus(process.env.INIT_EXIT);
+              const validateStatus = toStatus(process.env.VALIDATE_EXIT);
+              const testStatus = toStatus(process.env.TEST_EXIT);
+              const tflintStatus = toStatus(process.env.TFLINT_EXIT);
+              const tfsecStatus = toStatus(process.env.TFSEC_EXIT);
               const overall = process.env.FAILED_FLAG === '1' ? 'FAIL' : 'PASS';
 
               body += `Run: ${process.env.RUN_URL} (attempt ${process.env.RUN_ATTEMPT})\n\n`;
