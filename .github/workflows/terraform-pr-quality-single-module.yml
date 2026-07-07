@@ -67,6 +67,7 @@ jobs:
           BASE_SHA_INPUT: ${{ inputs['base-sha'] }}
           HEAD_SHA_INPUT: ${{ inputs['head-sha'] }}
           EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_ONLY_IF_TF_CHANGED: ${{ inputs['run-only-if-tf-changed'] }}
@@ -101,6 +102,17 @@ jobs:
 
           if ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; then
             git fetch --no-tags --depth=1 origin "${HEAD_SHA}" || true
+          fi
+
+          # fallback when SHAs not directly fetchable in PR context
+          if { ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; } && [ "${EVENT_NAME}" == "pull_request"] && [ -n "${PR_BASE_REF}"]; then
+            echo "falling back to PR base ref comparison using origin/${PR_BASE_REF}"
+            git fetch --no-tags --depth=1 origin "${PR_BASE_REF}" || true
+            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
+              BASE_SHA="$(git rev-parse FETCH_HEAD)"
+              HEAD_SHA="$(git rev-parse HEAD)"
+              echo "Fallback SHAs resolved: base=${BASE_SHA} head=${HEAD_SHA}"
+            fi
           fi
 
           if ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; then
