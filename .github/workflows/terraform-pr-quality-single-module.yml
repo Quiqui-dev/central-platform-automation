@@ -285,6 +285,14 @@ jobs:
               return String(value) === '0' ? 'PASS' : 'FAIL';
             }
 
+            const sanitiseSnippet = (text) => {
+              // Remove ANSI escape codes and other chars that break markdown
+              return String(text)
+                .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                .trim();
+            }
+
             const runChecks = process.env.RUN_CHECKS;
             let body = `${marker}\n## Terraform PR Validation Summary\n\n`;
 
@@ -318,7 +326,7 @@ jobs:
                 const filePath = path.join(reportsDir, fileName);
                 if (!fs.existsSync(filePath)) return;
                 const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
-                const snippet = lines.slice(-60).join('\n').trim();
+                const snippet = sanitiseSnippet(lines.slice(-60).join('\n'));
                 if (!snippet) return;
                 body += `\n\n### ${title}\n\n\`\`\`text\n${snippet}\n\`\`\``;
               }
