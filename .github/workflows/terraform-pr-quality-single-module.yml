@@ -109,7 +109,7 @@ jobs:
         uses: terraform-linters/setup-tflint@v4
 
       - name: Install tfsec
-        if: steps.changes.outputs.run_checks == 'true' && inputs.run-tfsec
+        if: steps.changes.outputs.run_checks == 'true' && inputs['run-tfsec']
         shell: bash
         run: |
           set -euo pipefail
@@ -236,7 +236,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: create or update pr comment
-        if: inputs.post-pr-comment && (github.event_name == 'pull_request' || inputs.pr-number > 0)
+        if: inputs['post-pr-comment'] && (github.event_name == 'pull_request' || inputs['pr-number'] > 0)
         uses: actions/github-script@v7
         env:
           SUMMARY_COMMENT: ${{steps.summary.outputs.comment}}
