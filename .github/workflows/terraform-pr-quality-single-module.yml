@@ -1,4 +1,4 @@
-name: Reusable Terraform PR Quality Gate (Single Module)s
+name: Reusable Terraform PR Quality Gate (Single Module)
 
 on:
   workflow_call:
