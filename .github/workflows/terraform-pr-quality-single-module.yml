@@ -225,6 +225,7 @@ jobs:
               echo "${name}: FAIL" >&2
             fi
 
+            echo "${name}: "
             echo "${code}"
           }
 
@@ -262,20 +263,6 @@ jobs:
         run: |
           set -euo pipefail
           REPORTS_DIR="${GITHUB_WORKSPACE}/reports"
-
-          if [[ "${{steps.changes.outputs.run_checks}}" == "true" ]]; then
-            {
-              echo 'comment<<EOF'
-              echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
-              echo '## Terraform PR Validation Summary'
-              echo
-              echo '- INFO No Terraform Source or Test changes detected in scope'
-              echo
-              echo '**Result:** PASS (nothing to validate)'
-              echo 'EOF'
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
 
           to_status() {
             if [[ "$1" == "0" ]]; then
@@ -325,6 +312,63 @@ jobs:
           TEST_ERROR_SNIPPET=""
           if [[ "${TEST_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/test.log" ]]; then
             TEST_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/test.log" || true)
+          fi
+
+
+          if [[ "${{steps.changes.outputs.run_checks}}" == "true" ]]; then
+            {
+              echo 'comment<<EOF'
+              echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
+              echo '## Terraform PR Validation Summary'
+              echo
+              echo '- INFO No Terraform Source or Test changes detected in scope'
+              echo
+              echo '**Result:** PASS (nothing to validate)'
+              if [[ -n "${INIT_ERROR_SNIPPET}" ]]; then
+              echo
+              echo '### terraform init error (last 60 lines)'
+              echo '```text'
+              echo '${INIT_ERROR_SNIPPET}'
+              echo '```'
+              fi
+              if [[ -n "${VALIDATE_ERROR_SNIPPET}" ]]; then
+                echo
+                echo '### terraform validate error (last 60 lines)'
+                echo '```text'
+                echo '${VALIDATE_ERROR_SNIPPET}'
+                echo '```'
+              fi
+              if [[ -n "${FMT_ERROR_SNIPPET}" ]]; then
+                echo
+                echo '### terraform fmt error (last 60 lines)'
+                echo '```text'
+                echo '${FMT_ERROR_SNIPPET}'
+                echo '```'
+              fi
+              if [[ -n "${TEST_ERROR_SNIPPET}" ]]; then
+                echo
+                echo '### terraform test error (last 60 lines)'
+                echo '```text'
+                echo '${TEST_ERROR_SNIPPET}'
+                echo '```'
+              fi
+              if [[ -n "${TFLINT_ERROR_SNIPPET}" ]]; then
+                echo
+                echo '### tflint error (last 60 lines)'
+                echo '```text'
+                echo '${TFLINT_ERROR_SNIPPET}'
+                echo '```'
+              fi
+              if [[ -n "${TFSEC_ERROR_SNIPPET}" ]]; then
+                echo
+                echo '### tfsec error (last 60 lines)'
+                echo '```text'
+                echo '${TFSEC_ERROR_SNIPPET}'
+                echo '```'
+              fi
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           {
