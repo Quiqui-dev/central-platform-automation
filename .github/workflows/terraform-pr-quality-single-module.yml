@@ -138,7 +138,6 @@ jobs:
           run_and_capture() {
             local name="$1"
             local cmd="$2"
-            local var_names="$3"
             local logfile="reports/${name}.log"
             set +e
             bash -lc "${cmd}" > "${logfile}" 2>&1
@@ -146,23 +145,24 @@ jobs:
             set -e
 
             echo "${name}_exit=${code}" >> "$GITHUB_OUTPUT"
-            printf -v "$var-name" '%s' "$code"
             if [[ $code -eq 0 ]]; then
-              echo "${name}: PASS"
+              echo "${name}: PASS" >&2
             else
-              echo "${name}: FAIL"
+              echo "${name}: FAIL" >&2
             fi
+
+            echo "${code}"
           }
 
           pushd "${TERRAFORM_PATH}" > /dev/null
-          run_and_capture "fmt" "terraform fmt -check -recursive" "FMT_EXIT"
-          run_and_capture "init" "terraform init -backend=false" "INIT_EXIT"
-          run_and_capture "validate" "terraform validate" "VALIDATE_EXIT"
-          run_and_capture "test" "terraform test" "TEST_EXIT"
-          run_and_capture "tflint" "tflint --init && tflint" "TFLINT_EXIT"
+          FMT_EXIT="$(run_and_capture "fmt" "terraform fmt -check -recursive")"
+          INIT_EXIT="$(run_and_capture "init" "terraform init -backend=false")"
+          VALIDATE_EXIT="$(run_and_capture "validate" "terraform validate")"
+          TEST_EXIT="$(run_and_capture "test" "terraform test")"
+          TFLINT_EXIT="$(run_and_capture "tflint" "tflint --init && tflint")"
 
           if [[ "${RUN_TFSEC}" == "true" ]]; then
-            run_and_capture "tfsec" "tfsec --no-color ." "TFSEC_EXIT"
+            TFSEC_EXIT="$(run_and_capture "tfsec" "tfsec --no-color .")"
           else
             TFSEC_EXIT=0
             echo "tfsec_exit=0" >> "$GITHUB_OUTPUT"
