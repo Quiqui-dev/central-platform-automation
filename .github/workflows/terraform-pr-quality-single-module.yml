@@ -229,6 +229,11 @@ jobs:
             INIT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/init.log" || true)
           fi
 
+          FMT_ERROR_SNIPPET=""
+          if [[ "${FMT_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/fmt.log" ]]; then
+            FMT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/fmt.log" || true)
+          fi
+
           VALIDATE_ERROR_SNIPPET=""
           if [[ "${VALIDATE_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/validate.log" ]]; then
             VALIDATE_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/validate.log" || true)
@@ -277,6 +282,13 @@ jobs:
               echo '### terraform validate error (last 60 lines)'
               echo '```text'
               echo '${VALIDATE_ERROR_SNIPPET}'
+              echo '```'
+            fi
+            if [[ -n "${FMT_ERROR_SNIPPET}" ]]; then
+              echo
+              echo '### terraform fmt error (last 60 lines)'
+              echo '```text'
+              echo '${FMT_ERROR_SNIPPET}'
               echo '```'
             fi
             if [[ -n "${TEST_ERROR_SNIPPET}" ]]; then
