@@ -295,7 +295,7 @@ jobs:
           TFSEC_STATUS=$(to_status "{{steps.checks.output.tfsec_exit}}")
 
           OVERALL="PASS"
-          if [ "${{ steps.checks.outputs.failed }}" == "1"];
+          if [ "${{ steps.checks.outputs.failed }}" == "1"]; then
             OVERALL="FAILED"
           fi
 
