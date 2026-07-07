@@ -64,18 +64,24 @@ jobs:
         shell: bash
         env:
           TERRAFORM_PATH: ${{ inputs['terraform-path'] }}
+          BASE_SHA_INPUT: ${{ inputs['base-sha'] }}
+          HEAD_SHA_INPUT: ${{ inputs['head-sha'] }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ONLY_IF_TF_CHANGED: ${{ inputs['run-only-if-tf-changed'] }}
         run: |
           set -euo pipefail
 
-          BASE_SHA="${{ inputs['base-sha'] }}"
-          HEAD_SHA="${{ inputs['head-sha'] }}"
+          BASE_SHA="${BASE_SHA_INPUT}"
+          HEAD_SHA="${HEAD_SHA_INPUT}"
 
-          if [[ -z "$BASE_SHA" && "${{github.event_name}}" == "pull_request" ]]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha}}"
+          if [[ -z "$BASE_SHA" ]] && [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            BASE_SHA="${PR_BASE_SHA}"
           fi
 
-          if [[ -z "$HEAD_SHA" && "${{github.event_name}}" == "pull_request" ]]; then
-            HEAD_SHA="${{ github.event.pull_request.head.sha}}"
+          if [[ -z "$HEAD_SHA"]] && [["${EVENT_NAME}" == "pull_request" ]]; then
+            HEAD_SHA="${PR_HEAD_SHA}"
           fi
 
           if [[ -z "$BASE_SHA" || -z "$HEAD_SHA"]]; then
@@ -88,7 +94,7 @@ jobs:
           CHANGED_TF_COUNT=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" -- "${TERRAFORM_PATH}" | grep -E '\.tf$|\.tftest\.hcl$' | wc -l | tr -f ' ' || true)
           CHANGED_TF_COUNT=${CHANGED_TF_COUNT:-0}
 
-          if [[ "${{ inputs['run-only-if-tf-changed'] }}" == "true"]]; then
+          if [[ "${RUN_ONLY_IF_TF_CHANGED}" == "true"]]; then
             if [[ "${CHANGED_TF_COUNT}" -gt 0 ]]; then
               echo "run_checks=true" >> "$GITHUB_OUTPUT"
             else
