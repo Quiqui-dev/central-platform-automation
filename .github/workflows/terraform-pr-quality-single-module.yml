@@ -91,8 +91,63 @@ jobs:
             exit 0
           fi
 
-          CHANGED_TF_COUNT=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" -- "${TERRAFORM_PATH}" | grep -E '\.tf$|\.tftest\.hcl$' | wc -l | tr -d ' ' || true)
-          CHANGED_TF_COUNT=${CHANGED_TF_COUNT:-0}
+          SCOPE_PATH="${TERRAFORM_PATH}"
+          SCOPE_PATH="${SCOPE_PATH#./}"
+          SCOPE_PATH="${SCOPE_PATH%/}"
+
+          if ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "${BASE_SHA}" || true
+          fi
+
+          if ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "${HEAD_SHA}" || true
+          fi
+
+          if ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; then
+            echo "Unable to resolve one or both diff SHAs locally; running checks by default."
+            echo "run_checks=true" >> "$GITHUB_OUTPUT"
+            echo "changed_tf_count=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          DIFF_OUTPUT=""
+          if ! DIFF_OUTPUT=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}"); then
+            echo "git diff failed; running checks by default."
+            echo "run_checks=true" >> "$GITHUB_OUTPUT"
+            echo "changed_tf_count=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mapfile -t ALL_CHANGED_FILES < <(printf '%s\n' "${DIFFO=_OUTPUT}")
+
+          if [ "${SCOPE_PATH}" = "." ] || [ -z "${SCOPE_PATH}" ]; then
+            SCOPED_FILES=("${ALL_CHANGED_FILES[@]}")
+          else
+            SCOPED_FILES=()
+            for file in "${ALL_CHANGED_FILES[@]}"; do
+              if [ "$file" = "${SCOPED_PATH}"] || [[ "$file" == "${SCOPED_PATH}/"* ]]; then
+                SCOPED_FILES+=("$file")
+              fi
+            done
+          fi
+
+          TF_CHANGED_FILES=()
+          for file in "${SCOPED_FILES[@]}"; do
+            case "$file" in
+              *.tf|*.tfvar|*.tf.json|*.tftest.hcl)
+                TF_CHANGED_FILES+=("$file")
+                ;;
+          done
+
+          CHANGED_TF_COUNT="${#TF_CHANGED_FILES[@]}"
+
+          echo "detected changed files in scope (${SCOPE_PATH:-.}): ${#SCOPED_FILES[@]}"
+          if [ "${CHANGED_TF_COUNT}" -gt 0]; then
+            echo "Terraform-related changed files (${CHANGED_TF_COUNT}):"
+            printf ' - %s\n' "${TF_CHANGED_FILES[@]}"
+          else
+            echo "Terraform-related changed files (0): none"
+          fi
 
           if [ "${RUN_ONLY_IF_TF_CHANGED}" = "true"; then
             if [ "${CHANGED_TF_COUNT}" -gt 0 ; then
