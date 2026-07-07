@@ -188,7 +188,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          REPORTS_DIR = "${GITHUB_WORKSPACE}/reports"
+          REPORTS_DIR="${GITHUB_WORKSPACE}/reports"
 
           if [[ "${{steps.changes.outputs.run_checks}}" == "true" ]]; then
             {
