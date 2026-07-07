@@ -264,8 +264,23 @@ jobs:
           set -euo pipefail
           REPORTS_DIR="${GITHUB_WORKSPACE}/reports"
 
+          if [[ "${{steps.changes.outputs.run_checks}}" != "true" ]]; then
+            {
+              echo 'comment<<EOF'
+              echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
+              echo '## Terraform PR Validation Summary'
+              echo
+              echo '- INFO No Terraform Source or Test changes detected in scope'
+              echo
+              echo '**Result:** PASS (nothing to validate)'
+              echo
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           to_status() {
-            if [[ "$1" == "0" ]]; then
+            if [ "$1" == "0" ]; then
               echo "PASS"
             else
               echo "FAIL"
@@ -280,7 +295,7 @@ jobs:
           TFSEC_STATUS=$(to_status "{{steps.checks.output.tfsec_exit}}")
 
           OVERALL="PASS"
-          if [[ "${{ steps.checks.outputs.failed }}" == "1"]];
+          if [ "${{ steps.checks.outputs.failed }}" == "1"];
             OVERALL="FAILED"
           fi
 
@@ -312,22 +327,6 @@ jobs:
           TEST_ERROR_SNIPPET=""
           if [[ "${TEST_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/test.log" ]]; then
             TEST_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/test.log" || true)
-          fi
-
-
-          if [[ "${{steps.changes.outputs.run_checks}}" != "true" ]]; then
-            {
-              echo 'comment<<EOF'
-              echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
-              echo '## Terraform PR Validation Summary'
-              echo
-              echo '- INFO No Terraform Source or Test changes detected in scope'
-              echo
-              echo '**Result:** PASS (nothing to validate)'
-              echo
-              echo 'EOF'
-            } >> "$GITHUB_OUTPUT"
-            exit 0
           fi
 
           {
