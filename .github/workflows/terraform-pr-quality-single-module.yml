@@ -38,6 +38,10 @@ on:
         required: false
         type: boolean
         default: true
+    secrets:
+      github-token:
+        description: Optional token for PR comment operations. Falls back to github.token when not provided
+        required: false
 
 permissions:
   contents: read
@@ -104,9 +108,15 @@ jobs:
         if: steps.changes.outputs.run_checks == 'true'
         uses: terraform-linters/setup-tflint@v4
 
-      - name: Setup tfsec
-        if: steps.changes.outputs.run_checks == 'true'
-        uses: aquasecurity/setup-tfsec@v1
+      - name: Install tfsec
+        if: steps.changes.outputs.run_checks == 'true' && inputs.run-tfsec
+        shell: bash
+        run: |
+          set -euo pipefail
+          TFSEC_VERSION="v1.28.11"
+          curl -sSL "https://github.com/aquasecurity/tfsec/releases/download/${TFSEC_VERSION}/tfsec-linux-amd64" -o /usr/local/bin/tfsec
+          chmod +x /usr/local/bin/tfsec
+          tfsec --version
 
       - name: Run quality and security checks
         if: steps.changes.outputs.run_checks == 'true'
@@ -231,6 +241,7 @@ jobs:
         env:
           SUMMARY_COMMENT: ${{steps.summary.outputs.comment}}
         with:
+          github-token: ${{ secrets.github-token || github.token }}
           script: |
             const marker = '<!-- terraform-pr-quality-summary -->';
             const body = process.env.SUMMARY_COMMENT;
