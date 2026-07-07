@@ -193,7 +193,7 @@ jobs:
           if [[ "${{steps.changes.outputs.run_checks}}" == "true" ]]; then
             {
               echo 'comment<<EOF'
-              echo '<!-- terraform-pr-quality-summary -->'
+              echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
               echo '## Terraform PR Validation Summary'
               echo
               echo '- INFO No Terraform Source or Test changes detected in scope'
@@ -256,8 +256,10 @@ jobs:
 
           {
             echo 'comment<<EOF'
-            echo '<!-- terraform-pr-quality-summary -->'
+            echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
             echo '## Terraform PR Validation Summary'
+            echo
+            echo "Run: ${{ github.server_url }}/${{github.repository}}/actions/runs/${{github.run_id}} (attempt ${{github.run_attempt}})"
             echo
             echo 'Check: `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `terraform test`, `tflint`, `tfsec`'
             echo
@@ -323,11 +325,18 @@ jobs:
         with:
           github-token: ${{ secrets['github-token'] || github.token }}
           script: |
-            const marker = '<!-- terraform-pr-quality-summary -->';
+            const marker = '<!-- terraform-pr-quality-summary:reusable-single-module -->';
             const body = process.env.SUMMARY_COMMENT;
+
+            if (!body || body.trim().length === 0) {
+              core.setFailed('SUMMARY_COMMENT is empty; vannot create/update PR comment.')
+              return;
+            }
 
             const {owner, repo} = context.repo;
             const issue_number = Number('${{inputs['pr-number']}}') || context.issue.number;
+
+            core.info(`Targeting PR #${issue_number} in ${owner}/${repo}`)
 
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner,
@@ -339,6 +348,7 @@ jobs:
             const existing = comments.find((c) => c.body && c.body.includes(marker));
 
             if (existing) {
+              core.info(`Updating existing summary comment id=${existing.id}`)
               await github.rest.issues.updateComment({
                 owner,
                 repo,
@@ -346,6 +356,7 @@ jobs:
                 body,
               });
             } else {
+              core.info('Creating new summary comment')
               await github.rest.issues.createComment({
                 owner,
                 repo,
