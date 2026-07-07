@@ -281,7 +281,7 @@ jobs:
             const marker = '<!-- terraform-pr-quality-summary:reusable-single-module -->';
 
             const toStatus = (value) => {
-              if (value === undefined || value === null || valle === '') return 'UNKNOWN';
+              if (value === undefined || value === null || vaule === '') return 'UNKNOWN';
               return String(value) === '0' ? 'PASS' : 'FAIL';
             }
 
