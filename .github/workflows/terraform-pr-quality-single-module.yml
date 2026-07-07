@@ -133,12 +133,13 @@ jobs:
           RUN_TFSEC: ${{ inputs['run-tfsec'] }}
         run: |
           set -euo pipefail
-          mkdir -p reports
+          REPORTS_DIR="${GITHUB_WORKSPACE}/reports"
+          mkdir -p "${REPORTS_DIR}"
 
           run_and_capture() {
             local name="$1"
             local cmd="$2"
-            local logfile="reports/${name}.log"
+            local logfile="${REPORTS_DIR}/${name}.log"
             set +e
             bash -lc "${cmd}" > "${logfile}" 2>&1
             local code=$?
@@ -187,6 +188,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          REPORTS_DIR = "${GITHUB_WORKSPACE}/reports"
 
           if [[ "${{steps.changes.outputs.run_checks}}" == "true" ]]; then
             {
@@ -222,6 +224,31 @@ jobs:
             OVERALL="FAILED"
           fi
 
+          INIT_ERROR_SNIPPET=""
+          if [[ "${INIT_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/init.log" ]]; then
+            INIT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/init.log" || true)
+          fi
+
+          VALIDATE_ERROR_SNIPPET=""
+          if [[ "${VALIDATE_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/validate.log" ]]; then
+            VALIDATE_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/validate.log" || true)
+          fi
+
+          TFSEC_ERROR_SNIPPET=""
+          if [[ "${TFSEC_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/tfsec.log" ]]; then
+            TFSEC_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tfsec.log" || true)
+          fi
+
+          TFLINT_ERROR_SNIPPET=""
+          if [[ "${TFLINT_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/tflint.log" ]]; then
+            TFLINT_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/tflint.log" || true)
+          fi
+
+          TEST_ERROR_SNIPPET=""
+          if [[ "${TEST_STATUS}" == "FAIL" && -f "${REPORTS_DIR}/test.log" ]]; then
+            TEST_ERROR_SNIPPET=$(tail -n 60 "${REPORTS_DIR}/test.log" || true)
+          fi
+
           {
             echo 'comment<<EOF'
             echo '<!-- terraform-pr-quality-summary -->'
@@ -237,6 +264,41 @@ jobs:
               echo '**Result:** PASS (quality/security checks passed)'
             else
               echo '**Result:** FAIL (quality/security checks failed)'
+            fi
+            if [[ -n "${INIT_ERROR_SNIPPET}" ]]; then
+              echo
+              echo '### terraform init error (last 60 lines)'
+              echo '```text'
+              echo '${INIT_ERROR_SNIPPET}'
+              echo '```'
+            fi
+            if [[ -n "${VALIDATE_ERROR_SNIPPET}" ]]; then
+              echo
+              echo '### terraform validate error (last 60 lines)'
+              echo '```text'
+              echo '${VALIDATE_ERROR_SNIPPET}'
+              echo '```'
+            fi
+            if [[ -n "${TEST_ERROR_SNIPPET}" ]]; then
+              echo
+              echo '### terraform test error (last 60 lines)'
+              echo '```text'
+              echo '${TEST_ERROR_SNIPPET}'
+              echo '```'
+            fi
+            if [[ -n "${TFLINT_ERROR_SNIPPET}" ]]; then
+              echo
+              echo '### tflint error (last 60 lines)'
+              echo '```text'
+              echo '${TFLINT_ERROR_SNIPPET}'
+              echo '```'
+            fi
+            if [[ -n "${TFSEC_ERROR_SNIPPET}" ]]; then
+              echo
+              echo '### tfsec error (last 60 lines)'
+              echo '```text'
+              echo '${TFSEC_ERROR_SNIPPET}'
+              echo '```'
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
