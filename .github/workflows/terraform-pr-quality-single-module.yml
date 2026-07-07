@@ -304,7 +304,7 @@ jobs:
               body += 'Check: `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `terraform test`, `tflint`, `tfsec`\n\n';
               body += '| Scope | Overall | fmt | init | validate | test | tflint | tfsec |\n';
               body += '|---|---|---|---|---|---|---|---|\n';
-              body += `| ${process.env.TERRAFORM_PATH_INPUT} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |\n\n`;
+              body += `| ${process.env.TERRAFORM_PATH_INPUT} | ${overall} | ${fmtStatus} | ${initStatus} | ${validateStatus} | ${testStatus} | ${tflintStatus} | ${tfsecStatus} |\n\n`;
 
               if (overall === 'PASS') {
                 body += '**Result:** PASS (quality/security checks passed)';
