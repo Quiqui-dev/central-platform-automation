@@ -260,11 +260,22 @@ jobs:
       - name: Build PR Summary
         id: summary
         shell: bash
+        env:
+          REPORTS_DIR: ${{ github.workspace }}/reports
+          RUN_CHECKS: ${{ steps.changes.outputs.run_checks }}
+          FMT_EXIT: ${{ steps.checks.outputs.fmt_exit }}
+          INIT_EXIT: ${{ steps.checks.outputs.init_exit }}
+          VALIDATE_EXIT: ${{ steps.checks.outputs.validate_exit }}
+          TEST_EXIT: ${{ steps.checks.outputs.test_exit }}
+          TFLINT_EXIT: ${{ steps.checks.outputs.tflint_exit }}
+          TFSEC_EXIT: ${{ steps.checks.outputs.tfsec_exit }}
+          FAILED_FLAG: ${{ steps.checks.outputs.failed }}
+          RUN_URL: ${{ github.server_url }}/${{github.repository}}/actions/runs/${{github.run_id}}
+          RUN_ATTEMPT: ${{github.run_attempt}}
         run: |
           set -euo pipefail
-          REPORTS_DIR="${GITHUB_WORKSPACE}/reports"
 
-          if [[ "${{steps.changes.outputs.run_checks}}" != "true" ]]; then
+          if [[ "${RUN_CHECKS} != "true" ]]; then
             {
               echo 'comment<<EOF'
               echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
@@ -280,22 +291,25 @@ jobs:
           fi
 
           to_status() {
-            if [ "$1" == "0" ]; then
+            local code="$1"
+            if [[ -z "${code}" ]]; then
+              echo "UNKNOWN"
+            elif [[ "${code}" == "0" ]]; then
               echo "PASS"
             else
               echo "FAIL"
             fi
           }
 
-          FMT_STATUS=$(to_status "{{steps.checks.output.fmt_exit}}")
-          INIT_STATUS=$(to_status "{{steps.checks.output.init_exit}}")
-          VALIDATE_STATUS=$(to_status "{{steps.checks.output.validate_exit}}")
-          TEST_STATUS=$(to_status "{{steps.checks.output.test_exit}}")
-          TFLINT_STATUS=$(to_status "{{steps.checks.output.tflint_exit}}")
-          TFSEC_STATUS=$(to_status "{{steps.checks.output.tfsec_exit}}")
+          FMT_STATUS=$(to_status "${FMT_STATUS}")
+          INIT_STATUS=$(to_status "${INIT_STATUS}")
+          VALIDATE_STATUS=$(to_status "${VALIDATE_STATUS}")
+          TEST_STATUS=$(to_status "${TEST_STATUS}")
+          TFLINT_STATUS=$(to_status "${TFLINT_STATUS}")
+          TFSEC_STATUS=$(to_status "${TFSEC_STATUS}")
 
           OVERALL="PASS"
-          if [ "${{ steps.checks.outputs.failed }}" == "1"]; then
+          if [ "${FAILED_FLAG}" == "1"]; then
             OVERALL="FAILED"
           fi
 
@@ -334,13 +348,13 @@ jobs:
             echo '<!-- terraform-pr-quality-summary:reusable-single-module -->'
             echo '## Terraform PR Validation Summary'
             echo
-            echo "Run: ${{ github.server_url }}/${{github.repository}}/actions/runs/${{github.run_id}} (attempt ${{github.run_attempt}})"
+            echo "Run: ${RUN_URL} (attempt ${RUN_ATTEMPT})"
             echo
             echo 'Check: `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, `terraform test`, `tflint`, `tfsec`'
             echo
             echo '| Scope | Overall | fmt | init | validate | test | tflint | tfsec |'
             echo '|---|---|---|---|---|---|---|---|'
-            echo '| ${{inputs['terraform-path']}} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |'
+            echo "| ${{inputs['terraform-path']}} | ${OVERALL} | ${FMT_STATUS} | ${INIT_STATUS} | ${VALIDATE_STATUS} | ${TEST_STATUS} | ${TFLINT_STATUS} | ${TFSEC_STATUS} |"
             echo
             if [ "${OVERALL}" == "PASS" ]; then
               echo '**Result:** PASS (quality/security checks passed)'
