@@ -77,7 +77,7 @@ jobs:
           BASE_SHA="${BASE_SHA_INPUT}"
           HEAD_SHA="${HEAD_SHA_INPUT}"
 
-          if [[ -z "$BASE_SHA" && "${EVENT_NAME}" = "pull_request"]] ; then
+          if [[ -z "$BASE_SHA" && "${EVENT_NAME}" = "pull_request"]]; then
             BASE_SHA="${PR_BASE_SHA}"
           fi
 
@@ -104,7 +104,7 @@ jobs:
           fi
 
           # fallback when SHAs not directly fetchable in PR context
-          if { ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; }; then
+          if ! git cat-file -e "${BASE_SHA}^{comment}" 2>/dev/null || ! git cat-file -e "${HEAD_SHA}^{comment}" 2>/dev/null; then
             if [[ "${EVENT_NAME}" == "pull_request" &&  -n "${PR_BASE_REF}"]]; then
               echo "falling back to PR base ref comparison using origin/${PR_BASE_REF}"
               git fetch --no-tags --depth=1 origin "${PR_BASE_REF}" || true
