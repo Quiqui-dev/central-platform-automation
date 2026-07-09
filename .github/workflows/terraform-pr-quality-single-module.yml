@@ -214,7 +214,7 @@ jobs:
             raw="${raw//$'\r'/}"
             raw="$(echo "${raw}" | tr -d '[:space:]')"
 
-            if [[ "${raw}" =~ ^[0-9]+$ ]];; then
+            if [[ "${raw}" =~ ^[0-9]+$ ]]; then
               echo "${raw}"
             else 
               echo "1"
