@@ -262,8 +262,11 @@ jobs:
 
           FAILED=0
 
-          for code in "$FMT_EXIT" "$INIT_EXIT" "$VALIDATE_EXIT" "$TEST_EXIT" "$TFLINT_EXIT" "$TFSEC_EXIT"; do
-            if (( code != 0 )); then
+          for code in "${FMT_EXIT:-1}" "${INIT_EXIT:-1}" "${VALIDATE_EXIT:-1}" "${TEST_EXIT:-1}" "${TFLINT_EXIT:-1}" "${TFSEC_EXIT:-1}"; do
+            echo "${code}"  
+            code=$"(normalise_exit "${code:-1}")"  
+            echo "${code}" 
+            if [[ "${code}" != "0" ]]; then
               FAILED=1
               break
             fi
