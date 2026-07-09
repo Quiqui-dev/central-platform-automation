@@ -209,6 +209,18 @@ jobs:
           REPORTS_DIR="${GITHUB_WORKSPACE}/reports"
           mkdir -p "${REPORTS_DIR}"
 
+          normalise_exit() {
+            local raw="${1:-}"
+            raw="${raw//$'\r'/}"
+            raw="$(echo "${raw}" | tr -d '[:space:]')"
+
+            if [[ "${raw}" =~ ^[0-9]+$ ]];; then
+              echo "${raw}"
+            else 
+              echo "1"
+            fi
+          }
+
           run_and_capture() {
             local name="$1"
             local cmd="$2"
@@ -217,6 +229,8 @@ jobs:
             bash -lc "${cmd}" > "${logfile}" 2>&1
             local code=$?
             set -e
+
+            code="$(normalise_exit ${code})"
 
             echo "${name}_exit=${code}" >> "$GITHUB_OUTPUT"
             if [[ $code -eq 0 ]]; then
@@ -249,7 +263,7 @@ jobs:
           FAILED=0
 
           for code in "$FMT_EXIT" "$INIT_EXIT" "$VALIDATE_EXIT" "$TEST_EXIT" "$TFLINT_EXIT" "$TFSEC_EXIT"; do
-            if [[ code -ne 0 ]]; then
+            if (( code != 0 )); then
               FAILED=1
               break
             fi
