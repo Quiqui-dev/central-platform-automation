@@ -239,7 +239,6 @@ jobs:
               echo "${name}: FAIL" >&2
             fi
 
-            echo "${name}: "
             echo "${code}"
           }
 
