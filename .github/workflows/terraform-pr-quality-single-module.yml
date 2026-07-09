@@ -249,7 +249,7 @@ jobs:
           FAILED=0
 
           for code in "$FMT_EXIT" "$INIT_EXIT" "$VALIDATE_EXIT" "$TEST_EXIT" "$TFLINT_EXIT" "$TFSEC_EXIT"; do
-            if [[ "$code" != "0" ]]; then
+            if [[ ! $code -eq 0 ]]; then
               FAILED=1
               break
             fi
