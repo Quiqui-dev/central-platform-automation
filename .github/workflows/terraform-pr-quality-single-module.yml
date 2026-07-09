@@ -263,7 +263,7 @@ jobs:
 
           for code in "${FMT_EXIT:-1}" "${INIT_EXIT:-1}" "${VALIDATE_EXIT:-1}" "${TEST_EXIT:-1}" "${TFLINT_EXIT:-1}" "${TFSEC_EXIT:-1}"; do
             echo "${code}"  
-            code=$"(normalise_exit "${code:-1}")"  
+            code="$(normalise_exit "${code:-1}")"  
             echo "${code}" 
             if [[ "${code}" != "0" ]]; then
               FAILED=1
